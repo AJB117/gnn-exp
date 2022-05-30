@@ -1,9 +1,8 @@
-from pprint import pprint
 import networkx as nx
 import pickle
 import matplotlib.pyplot as plt
 import numpy as np
-from random import sample, randint
+from random import randint
 
 def get_empty_edge(A):
     zeros = np.argwhere(A == 0)
@@ -13,7 +12,7 @@ def get_empty_edge(A):
 trees = []
 non_trees = []
 k = 0
-for _ in range(200):
+for _ in range(300):
     G = nx.random_tree(20)
     trees.append(G)
 
