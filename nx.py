@@ -10,10 +10,10 @@ def get_empty_edge(A):
     x = np.random.choice(zeros.shape[0], 1, replace=False)
     return zeros[x][0]
 
-def embed_ohe(G):
+def embed_ohe(G, n_features):
     n = []
     for node in G.nodes:
-        ohe = np.zeros(len(G.nodes), dtype=np.float32)
+        ohe = np.zeros(n_features, dtype=np.float32)
         ohe[node] = 1
         n.append((node, {
             'x': ohe
@@ -28,17 +28,17 @@ non_trees = []
 
 for _ in range(300):
     G = nx.random_tree(20)
-    G = embed_ohe(G)
+    G = embed_ohe(G, 20)
     trees.append(G)
 
     H = nx.random_tree(20)
     nodes = H.nodes
-    num_edges = randint(10, 15)
+    num_edges = randint(1, 5)
     A = nx.adjacency_matrix(H)
     edges = [get_empty_edge(A) for _ in range(num_edges)]
     for (u, v) in edges:
         H.add_edge(u, v)
-    H = embed_ohe(H)
+    H = embed_ohe(H, 20)
     non_trees.append(H)
 
 pickle.dump([torch.tensor([[1, 0]], dtype=torch.float)]*len(trees), open('./trees_labels.pkl', 'wb'))

@@ -56,7 +56,7 @@ def main(args):
     test = to_device(test_t + test_n, device)
 
     num_hidden = args.hidden
-    model = GCN(train[0][0].x.shape[0], num_hidden, 2).to(device)
+    model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     loss_fn = nn.CrossEntropyLoss()
