@@ -1,10 +1,10 @@
 import pickle
-from sklearn.utils import shuffle
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
 import torch_geometric.nn as pyg_nn
+from sklearn.utils import shuffle
 from argparse import ArgumentParser
 
 class GCN(torch.nn.Module):
@@ -62,7 +62,7 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     loss_fn = nn.CrossEntropyLoss()
 
-    for e, epoch in enumerate(range(200)):
+    for epoch in range(args.epochs):
         model.train()
         train = shuffle(train)
         train_loss = 0.
@@ -80,11 +80,11 @@ def main(args):
             pred = model(d[0])
             if pred.argmax().item() == torch.where(d[1][0] > 0)[0].item():
                 val_correct += 1
-        
-        print(f'Epoch {e} train_loss: {train_loss}, val_acc: {val_correct/len(val)}')
+
+        print(f'Epoch {epoch} train_loss: {train_loss}, val_acc: {val_correct/len(val)}')
 
 if __name__ == "__main__":
     p = ArgumentParser()
-    p.add_argument("--hidden", type=int)
-    p.add_argument("--batch_size", type=int)
+    p.add_argument("--hidden", type=int, default=16)
+    p.add_argument("--epochs", type=int, default=100)
     main(p.parse_args())
