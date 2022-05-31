@@ -21,6 +21,7 @@ class GCN(torch.nn.Module):
         x = F.dropout(x, training=self.training)
         x = self.conv2(x, edge_idx)
         x = pyg_nn.global_mean_pool(x, batch=None, size=None)
+        x = F.dropout(x, training=self.training, p=0.4)
         x = self.ll(x)
         return torch.sigmoid(x)
 

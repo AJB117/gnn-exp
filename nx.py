@@ -1,8 +1,8 @@
 import networkx as nx
 import pickle
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from argparse import ArgumentParser
 from random import randint
 
 def get_empty_edge(A):
@@ -10,10 +10,10 @@ def get_empty_edge(A):
     x = np.random.choice(zeros.shape[0], 1, replace=False)
     return zeros[x][0]
 
-def embed_ohe(G, n_features):
+def embed_ohe(G, num_features):
     n = []
     for node in G.nodes:
-        ohe = np.zeros(n_features, dtype=np.float32)
+        ohe = np.zeros(num_features, dtype=np.float32)
         ohe[node] = 1
         n.append((node, {
             'x': ohe
@@ -23,26 +23,40 @@ def embed_ohe(G, n_features):
     H.add_edges_from(G.edges)
     return H
 
-trees = []
-non_trees = []
+def main(args):
+    trees = []
+    non_trees = []
 
-for _ in range(300):
-    G = nx.random_tree(20)
-    G = embed_ohe(G, 20)
-    trees.append(G)
+    tree_num_nodes = args.n_tree_nodes
+    no_tree_num_nodes = args.n_no_tree_nodes
 
-    H = nx.random_tree(20)
-    nodes = H.nodes
-    num_edges = randint(1, 5)
-    A = nx.adjacency_matrix(H)
-    edges = [get_empty_edge(A) for _ in range(num_edges)]
-    for (u, v) in edges:
-        H.add_edge(u, v)
-    H = embed_ohe(H, 20)
-    non_trees.append(H)
+    num_features = max(tree_num_nodes, no_tree_num_nodes)
 
-pickle.dump([torch.tensor([[1, 0]], dtype=torch.float)]*len(trees), open('./trees_labels.pkl', 'wb'))
-pickle.dump([torch.tensor([[0, 1]], dtype=torch.float)]*len(non_trees), open('./non_trees_labels.pkl', 'wb'))
+    for _ in range(args.n_graphs):
+        G = nx.random_tree(tree_num_nodes)
+        G = embed_ohe(G, num_features)
+        trees.append(G)
 
-pickle.dump(trees, open('./trees.pkl', 'wb'))
-pickle.dump(non_trees, open('./non_trees.pkl', 'wb'))
+        H = nx.random_tree(no_tree_num_nodes)
+        nodes = H.nodes
+        num_edges = randint(1, 5)
+        A = nx.adjacency_matrix(H)
+        edges = [get_empty_edge(A) for _ in range(num_edges)]
+        for (u, v) in edges:
+            H.add_edge(u, v)
+        H = embed_ohe(H, num_features)
+        non_trees.append(H)
+
+    pickle.dump([torch.tensor([[1, 0]], dtype=torch.float)]*len(trees), open('./trees_labels.pkl', 'wb'))
+    pickle.dump([torch.tensor([[0, 1]], dtype=torch.float)]*len(non_trees), open('./non_trees_labels.pkl', 'wb'))
+
+    pickle.dump(trees, open('./trees.pkl', 'wb'))
+    pickle.dump(non_trees, open('./non_trees.pkl', 'wb'))
+
+if __name__ == "__main__":
+    p = ArgumentParser()
+    p.add_argument("--n_features", type=int, default=20)
+    p.add_argument("--n_graphs", type=int, default=300)
+    p.add_argument("--n_tree_nodes", type=int, default=20)
+    p.add_argument("--n_no_tree_nodes", type=int, default=20)
+    main(p.parse_args())
