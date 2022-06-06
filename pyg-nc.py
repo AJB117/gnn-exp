@@ -13,8 +13,6 @@ class GCN(torch.nn.Module):
 
     def forward(self, data):
         x, edge_idx = data.x, data.edge_index
-        print(edge_idx)
-        exit()
         x = self.conv1(x, edge_idx)
         x = F.relu(x)
         x = F.dropout(x, training=self.training)

@@ -78,6 +78,7 @@ def train(g, model):
             print('In epoch {}, loss: {:.3f}, val acc: {:.3f} (best {:.3f}), test acc: {:.3f} (best {:.3f})'.format(
                 e, loss, val_acc, best_val_acc, test_acc, best_test_acc))
 
-graph = graph.to('cuda')
-model = GCN(graph.ndata['feat'].shape[1], 16, dataset.num_classes).to('cuda')
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+graph = graph.to(device)
+model = GCN(graph.ndata['feat'].shape[1], 16, dataset.num_classes).to(device)
 train(graph, model)
