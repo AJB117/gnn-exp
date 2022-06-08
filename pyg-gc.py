@@ -12,27 +12,28 @@ class GCN(torch.nn.Module):
         super().__init__()
         self.conv1 = pyg_nn.GCNConv(num_features, num_hidden)
         self.conv2 = pyg_nn.GCNConv(num_hidden, num_hidden)
+        self.conv3 = pyg_nn.GCNConv(num_hidden, num_hidden)
         self.ll = nn.Linear(num_hidden, num_classes)
 
     def forward(self, data):
         x, edge_idx = data.x, data.edge_index
         x = self.conv1(x, edge_idx)
-        x = F.relu(x)
-        x = F.dropout(x, training=self.training)
+        x = x.relu()
         x = self.conv2(x, edge_idx)
-        x = pyg_nn.global_mean_pool(x, batch=None, size=None)
-        x = F.dropout(x, training=self.training, p=0.4)
+        x = x.relu()
+        x = self.conv3(x, edge_idx)
+        x = pyg_nn.global_add_pool(x, batch=None, size=None)
+        x = F.dropout(x, training=self.training, p=0.5)
         x = self.ll(x)
-        return torch.sigmoid(x)
+        return x
 
-def split(data, split=(0.7, 0.15, 0.15)):
+def split(data, split=(0.8, None)):
     n = len(data)
-    t, v, te = split
+    t, v = split
     train = data[:int(n*t)]
-    val = data[int(n*t):int(n*t)+int(n*v)]
-    test = data[int(n*t)+int(n*v):]
+    val = data[int(n*t):]
 
-    return train, val, test
+    return train, val
 
 def to_device(data, device):
     new = [(d[0].to(device), d[1].to(device)) for d in data]
@@ -49,12 +50,11 @@ def main(args):
     tree_data = [(from_networkx(t), trees_labels[i]) for i, t in enumerate(trees)]
     non_tree_data = [(from_networkx(n), non_trees_labels[i]) for i, n in enumerate(non_trees)]
 
-    train_t, val_t, test_t = split(tree_data)
-    train_n, val_n, test_n = split(non_tree_data)
+    train_t, val_t = split(tree_data)
+    train_n, val_n = split(non_tree_data)
 
     train = to_device(train_t + train_n, device)
     val = to_device(val_t + val_n, device)
-    test = to_device(test_t + test_n, device)
 
     num_hidden = args.hidden
     model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
@@ -77,8 +77,8 @@ def main(args):
         model.eval()
         val_correct = 0
         for i, d in enumerate(val):
-            pred = model(d[0])
-            if pred.argmax().item() == torch.where(d[1][0] > 0)[0].item():
+            pred = model(d[0]).argmax(dim=1)
+            if pred == torch.where(d[1][0] > 0)[0].item():
                 val_correct += 1
 
         print(f'Epoch {epoch} train_loss: {train_loss}, val_acc: {val_correct/len(val)}')

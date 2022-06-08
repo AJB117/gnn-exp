@@ -3,20 +3,15 @@ import pickle
 import numpy as np
 import torch
 from argparse import ArgumentParser
-from random import randint
+from random import randint, sample
 
-def get_empty_edge(A):
-    zeros = np.argwhere(A == 0)
-    x = np.random.choice(zeros.shape[0], 1, replace=False)
-    return zeros[x][0]
-
-def embed_ohe(G, num_features):
+def add_one_hots(G, num_features):
     n = []
     for node in G.nodes:
-        ohe = np.zeros(num_features, dtype=np.float32)
-        ohe[node] = 1
+        one_hot = np.zeros(num_features, dtype=np.float32)
+        one_hot[node] = 1
         n.append((node, {
-            'x': ohe
+            'x': one_hot
         }))
     H = nx.Graph()
     H.add_nodes_from(n)
@@ -34,21 +29,20 @@ def main(args):
 
     for _ in range(args.n_graphs):
         G = nx.random_tree(tree_num_nodes)
-        G = embed_ohe(G, num_features)
+        G = add_one_hots(G, num_features)
         trees.append(G)
 
         H = nx.random_tree(no_tree_num_nodes)
-        nodes = H.nodes
-        num_edges = randint(1, 5)
-        A = nx.adjacency_matrix(H)
-        edges = [get_empty_edge(A) for _ in range(num_edges)]
+        n_edges_to_add = randint(3, 3)
+        edges = sample(list(nx.non_edges(H)), n_edges_to_add)
         for (u, v) in edges:
             H.add_edge(u, v)
-        H = embed_ohe(H, num_features)
+
+        H = add_one_hots(H, num_features)
         non_trees.append(H)
 
-    pickle.dump([torch.tensor([[1, 0]], dtype=torch.float)]*len(trees), open('./trees_labels.pkl', 'wb'))
-    pickle.dump([torch.tensor([[0, 1]], dtype=torch.float)]*len(non_trees), open('./non_trees_labels.pkl', 'wb'))
+    pickle.dump([torch.tensor([[0, 1]], dtype=torch.float)]*len(trees), open('./trees_labels.pkl', 'wb'))
+    pickle.dump([torch.tensor([[1, 0]], dtype=torch.float)]*len(non_trees), open('./non_trees_labels.pkl', 'wb'))
 
     pickle.dump(trees, open('./trees.pkl', 'wb'))
     pickle.dump(non_trees, open('./non_trees.pkl', 'wb'))
@@ -56,7 +50,7 @@ def main(args):
 if __name__ == "__main__":
     p = ArgumentParser()
     p.add_argument("--n_features", type=int, default=20)
-    p.add_argument("--n_graphs", type=int, default=300)
+    p.add_argument("--n_graphs", type=int, default=1200)
     p.add_argument("--n_tree_nodes", type=int, default=20)
     p.add_argument("--n_no_tree_nodes", type=int, default=20)
     main(p.parse_args())
