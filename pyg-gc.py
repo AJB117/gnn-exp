@@ -12,7 +12,6 @@ class GCN(torch.nn.Module):
         super().__init__()
         self.conv1 = pyg_nn.GCNConv(num_features, num_hidden)
         self.conv2 = pyg_nn.GCNConv(num_hidden, num_hidden)
-        self.conv3 = pyg_nn.GCNConv(num_hidden, num_hidden)
         self.ll = nn.Linear(num_hidden, num_classes)
 
     def forward(self, data):
@@ -20,10 +19,26 @@ class GCN(torch.nn.Module):
         x = self.conv1(x, edge_idx)
         x = x.relu()
         x = self.conv2(x, edge_idx)
-        x = x.relu()
-        x = self.conv3(x, edge_idx)
         x = pyg_nn.global_add_pool(x, batch=None, size=None)
         x = F.dropout(x, training=self.training, p=0.5)
+        x = self.ll(x)
+        return x
+
+class GAT(torch.nn.Module):
+    def __init__(self, num_features, num_hidden, num_classes, n_heads) -> None:
+        super().__init__()
+        self.n_heads = n_heads
+        self.conv1 = pyg_nn.GATConv(num_features, num_hidden, heads=self.n_heads, dropout=0.6)
+        self.conv2 = pyg_nn.GATConv(num_hidden*self.n_heads, num_hidden, concat=False)
+        self.ll = nn.Linear(num_hidden, num_classes)
+
+    def forward(self, data):
+        x, edge_idx = data.x, data.edge_index
+        x = self.conv1(x, edge_idx)
+        x = x.relu()
+        x = F.dropout(x, training=self.training, p=0.5)
+        x = self.conv2(x, edge_idx)
+        x = pyg_nn.global_add_pool(x, batch=None, size=None)
         x = self.ll(x)
         return x
 
@@ -57,7 +72,11 @@ def main(args):
     val = to_device(val_t + val_n, device)
 
     num_hidden = args.hidden
-    model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
+
+    if args.model == "gcn":
+        model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
+    elif args.model == "gat":
+        model = GAT(train[0][0].x.shape[1], num_hidden, 2, 8)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     loss_fn = nn.CrossEntropyLoss()
@@ -87,4 +106,5 @@ if __name__ == "__main__":
     p = ArgumentParser()
     p.add_argument("--hidden", type=int, default=16)
     p.add_argument("--epochs", type=int, default=100)
+    p.add_argument("--model", type=str, choices=["gcn", "gat"])
     main(p.parse_args())

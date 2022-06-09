@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, GATConv
+from torch_geometric.nn.models import GAT
 from torch_geometric.datasets import Planetoid
 
 dataset = Planetoid(root='/tmp/Cora', name='Cora')
@@ -21,7 +22,9 @@ class GCN(torch.nn.Module):
         return F.log_softmax(x, dim=1)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = GCN().to(device)
+# model = GCN().to(device)
+model = GAT_Custom(dataset.num_features, dataset.num_classes).to(device)
+# model = GAT(dataset.num_features, 16, 2, dataset.num_classes, dropout=0.5).to(device)
 data = dataset[0].to(device)
 optimizer = torch.optim.RMSprop(model.parameters(), lr=0.01, weight_decay=5e-4)
 
