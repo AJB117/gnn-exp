@@ -1,46 +1,11 @@
 import pickle
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
-import torch_geometric.nn as pyg_nn
+# from torch_geometric.nn.models import GIN, GAT, GCN
 from sklearn.utils import shuffle
 from argparse import ArgumentParser
-
-class GCN(torch.nn.Module):
-    def __init__(self, num_features, num_hidden, num_classes) -> None:
-        super().__init__()
-        self.conv1 = pyg_nn.GCNConv(num_features, num_hidden)
-        self.conv2 = pyg_nn.GCNConv(num_hidden, num_hidden)
-        self.ll = nn.Linear(num_hidden, num_classes)
-
-    def forward(self, data):
-        x, edge_idx = data.x, data.edge_index
-        x = self.conv1(x, edge_idx)
-        x = x.relu()
-        x = self.conv2(x, edge_idx)
-        x = pyg_nn.global_add_pool(x, batch=None, size=None)
-        x = F.dropout(x, training=self.training, p=0.5)
-        x = self.ll(x)
-        return x
-
-class GAT(torch.nn.Module):
-    def __init__(self, num_features, num_hidden, num_classes, n_heads) -> None:
-        super().__init__()
-        self.n_heads = n_heads
-        self.conv1 = pyg_nn.GATConv(num_features, num_hidden, heads=self.n_heads, dropout=0.6)
-        self.conv2 = pyg_nn.GATConv(num_hidden*self.n_heads, num_hidden, concat=False)
-        self.ll = nn.Linear(num_hidden, num_classes)
-
-    def forward(self, data):
-        x, edge_idx = data.x, data.edge_index
-        x = self.conv1(x, edge_idx)
-        x = x.relu()
-        x = F.dropout(x, training=self.training, p=0.5)
-        x = self.conv2(x, edge_idx)
-        x = pyg_nn.global_add_pool(x, batch=None, size=None)
-        x = self.ll(x)
-        return x
+from models import GCN_C, GIN_C, GAT_C, GCN
 
 def split(data, split=(0.8, None)):
     n = len(data)
@@ -74,9 +39,13 @@ def main(args):
     num_hidden = args.hidden
 
     if args.model == "gcn":
-        model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
+        # model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
+        model = GCN_C(in_channels=train[0][0].x.shape[1], hidden_channels=num_hidden, num_layers=2, out_channels=num_hidden).to(device)
     elif args.model == "gat":
-        model = GAT(train[0][0].x.shape[1], num_hidden, 2, 8)
+        # model = GAT(train[0][0].x.shape[1], num_hidden, 2, 8).to(device)
+        model = GAT_C(in_channels=train[0][0].x.shape[1], hidden_channels=num_hidden, num_layers=2, out_channels=num_hidden).to(device)
+    elif args.model == "gin":
+        model = GIN_C(in_channels=train[0][0].x.shape[1], hidden_channels=num_hidden, num_layers=2, out_channels=num_hidden).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     loss_fn = nn.CrossEntropyLoss()
@@ -87,7 +56,8 @@ def main(args):
         train_loss = 0.
         for i, d in enumerate(train):
             optimizer.zero_grad()
-            out = model(d[0])
+            out = model(d[0].x, d[0].edge_index)
+            # out = model(d[0])
             loss = loss_fn(out, d[1])
             train_loss += loss.item()
             loss.backward()
@@ -96,7 +66,8 @@ def main(args):
         model.eval()
         val_correct = 0
         for i, d in enumerate(val):
-            pred = model(d[0]).argmax(dim=1)
+            # pred = model(d[0]).argmax(dim=1)
+            pred = model(d[0].x, d[0].edge_index).argmax(dim=1)
             if pred == torch.where(d[1][0] > 0)[0].item():
                 val_correct += 1
 
@@ -106,5 +77,5 @@ if __name__ == "__main__":
     p = ArgumentParser()
     p.add_argument("--hidden", type=int, default=16)
     p.add_argument("--epochs", type=int, default=100)
-    p.add_argument("--model", type=str, choices=["gcn", "gat"])
+    p.add_argument("--model", type=str, choices=["gcn", "gat", "gin"])
     main(p.parse_args())
