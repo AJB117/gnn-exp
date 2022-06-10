@@ -2,10 +2,9 @@ import pickle
 import torch
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
-# from torch_geometric.nn.models import GIN, GAT, GCN
 from sklearn.utils import shuffle
 from argparse import ArgumentParser
-from models import GCN, GIN
+from models import GCN, GIN, GAT
 
 def split(data, split=(0.8, None)):
     n = len(data)
@@ -37,15 +36,19 @@ def main(args):
     val = to_device(val_t + val_n, device)
 
     num_hidden = args.hidden
+    num_features = train[0][0].x.shape[1]
+    layers = args.layers
+    model = args.model
 
-    if args.model == "gcn":
-        # model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
-        model = GCN(train[0][0].x.shape[1], num_hidden, 2, 3).to(device)
-    elif args.model == "gat":
-        # model = GAT(train[0][0].x.shape[1], num_hidden, 2, 8).to(device)
-        model = GAT_C(in_channels=train[0][0].x.shape[1], hidden_channels=num_hidden, num_layers=2, out_channels=num_hidden).to(device)
-    elif args.model == "gin":
-        model = GIN(train[0][0].x.shape[1], num_hidden, 2, 3).to(device)
+    if model == "gcn":
+        model = GCN(num_features, num_hidden, layers, num_classes=2).to(device)
+    elif model == "gat":
+        model = GAT(num_features, num_hidden, layers, num_hidden, num_classes=2, heads=args.heads).to(device)
+    elif model == "gin":
+        model = GIN(num_features, num_hidden, layers, num_classes=2).to(device)
+
+    trainable_params = [p.numel() for p in model.parameters() if p.requires_grad]
+    print(f"number of trainable parameters: {sum(trainable_params)}")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     loss_fn = nn.CrossEntropyLoss()
@@ -57,7 +60,6 @@ def main(args):
         for i, d in enumerate(train):
             optimizer.zero_grad()
             out = model(d[0].x, d[0].edge_index)
-            # out = model(d[0])
             loss = loss_fn(out, d[1])
             train_loss += loss.item()
             loss.backward()
@@ -80,4 +82,6 @@ if __name__ == "__main__":
     p.add_argument("--hidden", type=int, default=16)
     p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--model", type=str, choices=["gcn", "gat", "gin"])
+    p.add_argument("--layers", type=int, default=3)
+    p.add_argument("--heads", type=int, default=8)
     main(p.parse_args())
