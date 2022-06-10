@@ -5,7 +5,7 @@ from torch_geometric.utils.convert import from_networkx
 # from torch_geometric.nn.models import GIN, GAT, GCN
 from sklearn.utils import shuffle
 from argparse import ArgumentParser
-from models import GCN_C, GIN_C, GAT_C, GCN
+from models import GCN, GIN
 
 def split(data, split=(0.8, None)):
     n = len(data)
@@ -40,12 +40,12 @@ def main(args):
 
     if args.model == "gcn":
         # model = GCN(train[0][0].x.shape[1], num_hidden, 2).to(device)
-        model = GCN_C(in_channels=train[0][0].x.shape[1], hidden_channels=num_hidden, num_layers=2, out_channels=num_hidden).to(device)
+        model = GCN(train[0][0].x.shape[1], num_hidden, 2, 3).to(device)
     elif args.model == "gat":
         # model = GAT(train[0][0].x.shape[1], num_hidden, 2, 8).to(device)
         model = GAT_C(in_channels=train[0][0].x.shape[1], hidden_channels=num_hidden, num_layers=2, out_channels=num_hidden).to(device)
     elif args.model == "gin":
-        model = GIN_C(in_channels=train[0][0].x.shape[1], hidden_channels=num_hidden, num_layers=2, out_channels=num_hidden).to(device)
+        model = GIN(train[0][0].x.shape[1], num_hidden, 2, 3).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
     loss_fn = nn.CrossEntropyLoss()
@@ -66,12 +66,14 @@ def main(args):
         model.eval()
         val_correct = 0
         for i, d in enumerate(val):
-            # pred = model(d[0]).argmax(dim=1)
-            pred = model(d[0].x, d[0].edge_index).argmax(dim=1)
-            if pred == torch.where(d[1][0] > 0)[0].item():
+            pred = model(d[0].x, d[0].edge_index).argmax(dim=1).item()
+            label = d[1].argmax(dim=1).item()
+            if i % 200 == 0:
+                print(f"pred: {pred}, real: {label}")
+            if pred == label:
                 val_correct += 1
 
-        print(f'Epoch {epoch} train_loss: {train_loss}, val_acc: {val_correct/len(val)}')
+        print(f'Epoch {epoch} train_loss: {train_loss}, val_acc: {val_correct/len(val)} {val_correct}/{len(val)}')
 
 if __name__ == "__main__":
     p = ArgumentParser()

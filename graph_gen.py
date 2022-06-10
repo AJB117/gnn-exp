@@ -30,7 +30,7 @@ def main(args):
         trees.append(G)
 
         H = nx.random_tree(num_features)
-        n_edges_to_add = randint(15,16)
+        n_edges_to_add = randint(8,10)
         edges = sample(list(nx.non_edges(H)), n_edges_to_add)
         for (u, v) in edges:
             H.add_edge(u, v)
