@@ -36,6 +36,20 @@ class GAT(gnn.models.GAT):
         x = self.ll(x)
         return x
 
+# https://arxiv.org/pdf/1706.02216.pdf
+class GraphSAGE(gnn.models.GraphSAGE):
+    def __init__(self, *args, **kwargs) -> None:
+        super(GraphSAGE, self).__init__(*args)
+
+        self.ll = nn.Linear(self.hidden_channels, kwargs['num_classes'])
+    
+    def forward(self, x: Tensor, edge_idx: Adj) -> Tensor:
+        x = super(GraphSAGE, self).forward(x, edge_idx)
+        x = gnn.global_add_pool(x, batch=None, size=None)
+        x = F.dropout(x, training=self.training, p=0.5)
+        x = self.ll(x)
+        return x
+
 # https://arxiv.org/abs/1810.00826
 class GIN(gnn.models.basic_gnn.BasicGNN):
     def __init__(self, *args, **kwargs) -> None:

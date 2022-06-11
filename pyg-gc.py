@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
 from sklearn.utils import shuffle
 from argparse import ArgumentParser
-from models import GCN, GIN, GAT
+from models import GCN, GIN, GAT, GraphSAGE
 
 def split(data, split=(0.8, None)):
     n = len(data)
@@ -37,15 +37,17 @@ def main(args):
 
     num_hidden = args.hidden
     num_features = train[0][0].x.shape[1]
-    layers = args.layers
+    num_layers = args.layers
     model = args.model
 
     if model == "gcn":
-        model = GCN(num_features, num_hidden, layers, num_classes=2).to(device)
+        model = GCN(num_features, num_hidden, num_layers, num_classes=2).to(device)
     elif model == "gat":
-        model = GAT(num_features, num_hidden, layers, num_hidden, num_classes=2, heads=args.heads).to(device)
+        model = GAT(num_features, num_hidden, num_layers, num_hidden, num_classes=2, heads=args.heads).to(device)
     elif model == "gin":
-        model = GIN(num_features, num_hidden, layers, num_classes=2).to(device)
+        model = GIN(num_features, num_hidden, num_layers, num_classes=2).to(device)
+    elif model == "graphsage":
+        model = GraphSAGE(num_features, num_hidden, num_layers, num_classes=2).to(device)
 
     trainable_params = [p.numel() for p in model.parameters() if p.requires_grad]
     print(f"number of trainable parameters: {sum(trainable_params)}")
@@ -81,7 +83,7 @@ if __name__ == "__main__":
     p = ArgumentParser()
     p.add_argument("--hidden", type=int, default=16)
     p.add_argument("--epochs", type=int, default=100)
-    p.add_argument("--model", type=str, choices=["gcn", "gat", "gin"])
+    p.add_argument("--model", type=str, choices=["gcn", "gat", "gin", "graphsage"])
     p.add_argument("--layers", type=int, default=3)
     p.add_argument("--heads", type=int, default=8)
     main(p.parse_args())
