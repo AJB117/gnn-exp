@@ -39,15 +39,16 @@ def main(args):
     num_features = train[0][0].x.shape[1]
     num_layers = args.layers
     model = args.model
+    num_lls = args.lls
 
     if model == "gcn":
-        model = GCN(num_features, num_hidden, num_layers, num_classes=2).to(device)
+        model = GCN(num_features, num_hidden, num_layers, num_classes=2, num_lls=num_lls).to(device)
     elif model == "gat":
-        model = GAT(num_features, num_hidden, num_layers, num_hidden, num_classes=2, heads=args.heads).to(device)
+        model = GAT(num_features, num_hidden, num_layers, num_hidden, num_classes=2, heads=args.heads, num_lls=num_lls).to(device)
     elif model == "gin":
-        model = GIN(num_features, num_hidden, num_layers, num_classes=2).to(device)
+        model = GIN(num_features, num_hidden, num_layers, num_classes=2, num_lls=num_lls, jk="cat").to(device)
     elif model == "graphsage":
-        model = GraphSAGE(num_features, num_hidden, num_layers, num_classes=2).to(device)
+        model = GraphSAGE(num_features, num_hidden, num_layers, num_classes=2, num_lls=num_lls).to(device)
 
     trainable_params = [p.numel() for p in model.parameters() if p.requires_grad]
     print(f"number of trainable parameters: {sum(trainable_params)}")
@@ -81,9 +82,12 @@ def main(args):
 
 if __name__ == "__main__":
     p = ArgumentParser()
-    p.add_argument("--hidden", type=int, default=16)
-    p.add_argument("--epochs", type=int, default=100)
+    p.add_argument("--hidden", type=int, default=16, help="Hidden unit size.")
+    p.add_argument("--epochs", type=int, default=100, help="Number of epochs to train for.")
     p.add_argument("--model", type=str, choices=["gcn", "gat", "gin", "graphsage"])
-    p.add_argument("--layers", type=int, default=3)
-    p.add_argument("--heads", type=int, default=8)
+    p.add_argument("--layers", type=int, default=3, help="# of graph convolutional layers to be used.")
+    p.add_argument("--heads", type=int, default=8, help="# of attention heads for GAT.")
+    p.add_argument("--lls", type=int, default=1, help="""# of linear layers in graph classification head.
+                                                        Final layer has no activation, but the rest are separated by ReLUs.
+                                                        Default=1.""")
     main(p.parse_args())

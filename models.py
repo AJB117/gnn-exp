@@ -1,23 +1,43 @@
+"""
+Wrappers around popular GNNs. Adjusted for graph classification.
+"""
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import torch_geometric.nn as gnn
 from torch import Tensor
 from torch_geometric.typing import Adj
-from typing import List
+from typing import Callable
+
+class GraphClassHead(torch.nn.Module):
+    def __init__(self, hidden_channels: int, num_layers: int, num_classes: int, pooling_fn: Callable) -> None:
+        super().__init__()
+        self.lls = nn.ModuleList(
+            nn.Sequential(
+                nn.Linear(hidden_channels, hidden_channels), nn.ReLU()
+            )
+            for _ in range(num_layers-1)
+        )
+        self.final_ll = nn.Linear(hidden_channels, num_classes)
+        self.pooling_fn = pooling_fn
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.pooling_fn(x, batch=None, size=None)
+        x = F.dropout(x, training=self.training, p=0.5)
+        for ll in self.lls:
+            x = ll(x)
+        x = self.final_ll(x)
+        return x
 
 # https://arxiv.org/abs/1609.02907
 class GCN(gnn.models.GCN):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args)
-        self.ll = nn.Linear(self.hidden_channels, kwargs['num_classes'])
-    
-    def forward(self, x: Tensor, edge_idx: Adj) -> Tensor:
-        x = super(GCN, self).forward(x, edge_idx)
-        x = gnn.global_add_pool(x, batch=None, size=None)
-        x = F.dropout(x, training=self.training, p=0.5)
-        x = self.ll(x)
-        return x
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
+
+    def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
+        x = super(GCN, self).forward(x, edge_idx, *args, **kwargs)
+        return self.class_head(x)
 
 # https://arxiv.org/abs/1710.10903
 class GAT(gnn.models.GAT):
@@ -25,62 +45,30 @@ class GAT(gnn.models.GAT):
         super(GAT, self).__init__(*args, heads=kwargs['heads'])
 
         self.final_attn = gnn.GATConv(self.hidden_channels, self.hidden_channels, 1)
-        self.ll = nn.Linear(self.hidden_channels, kwargs['num_classes'])
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
 
-    def forward(self, x: Tensor, edge_idx: Adj) -> Tensor:
-        x = super(GAT, self).forward(x, edge_idx)
+    def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
+        x = super(GAT, self).forward(x, edge_idx, *args, **kwargs)
         x = F.elu(x)
         x = self.final_attn(x, edge_idx)
-        x = gnn.global_add_pool(x, batch=None, size=None)
-        x = F.dropout(x, training=self.training, p=0.5)
-        x = self.ll(x)
-        return x
+        return self.class_head(x)
 
 # https://arxiv.org/pdf/1706.02216.pdf
 class GraphSAGE(gnn.models.GraphSAGE):
     def __init__(self, *args, **kwargs) -> None:
         super(GraphSAGE, self).__init__(*args)
-
-        self.ll = nn.Linear(self.hidden_channels, kwargs['num_classes'])
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
     
-    def forward(self, x: Tensor, edge_idx: Adj) -> Tensor:
-        x = super(GraphSAGE, self).forward(x, edge_idx)
-        x = gnn.global_add_pool(x, batch=None, size=None)
-        x = F.dropout(x, training=self.training, p=0.5)
-        x = self.ll(x)
-        return x
+    def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
+        x = super(GraphSAGE, self).forward(x, edge_idx, *args, **kwargs)
+        return self.class_head(x)
 
 # https://arxiv.org/abs/1810.00826
-class GIN(gnn.models.basic_gnn.BasicGNN):
+class GIN(gnn.models.GIN):
     def __init__(self, *args, **kwargs) -> None:
         super(GIN, self).__init__(*args)
-        self.ll = nn.Linear(self.num_layers*self.hidden_channels, kwargs['num_classes'])
-
-    def init_conv(self, in_channels: int, out_channels: int, **kwargs) -> gnn.conv.MessagePassing:
-        return gnn.GINConv(
-            nn.Sequential(
-                nn.Linear(in_channels, out_channels),
-                nn.BatchNorm1d(out_channels), nn.ReLU(),
-                nn.Linear(out_channels, out_channels), nn.ReLU()
-            ), **kwargs
-        )
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
 
     def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
-        # compute node representations
-        embs: List[Tensor] = []
-        for i, conv in enumerate(self.convs):
-            if i == 0:
-                embs.append(conv(x, edge_idx, *args, **kwargs))
-            else:
-                embs.append(conv(embs[i-1], edge_idx, *args, **kwargs))
-
-        # readout
-        hs = [gnn.global_add_pool(embs[i], batch=None) for i in range(self.num_layers)]
-
-        # cat the representations
-        h = torch.cat(hs, dim=1)
-
-        h = F.dropout(h, p=0.5, training=self.training)
-        h = self.ll(h)
-
-        return h
+        x = super(GIN, self).forward(x, edge_idx, *args, **kwargs)
+        return self.class_head(x)
