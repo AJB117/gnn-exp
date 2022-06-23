@@ -5,9 +5,9 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import torch_geometric.nn as gnn
-from torch import Tensor
+from torch import LongTensor, Tensor
 from torch_geometric.typing import Adj
-from typing import Callable
+from typing import Callable, Optional
 
 class GraphClassHead(torch.nn.Module):
     def __init__(self, hidden_channels: int, num_layers: int, num_classes: int, pooling_fn: Callable) -> None:
@@ -21,8 +21,8 @@ class GraphClassHead(torch.nn.Module):
         self.final_ll = nn.Linear(hidden_channels, num_classes)
         self.pooling_fn = pooling_fn
 
-    def forward(self, x: Tensor) -> Tensor:
-        x = self.pooling_fn(x, batch=None, size=None)
+    def forward(self, x: Tensor, batch: Optional[LongTensor]=None) -> Tensor:
+        x = self.pooling_fn(x, batch=batch)
         x = F.dropout(x, training=self.training, p=0.5)
         for ll in self.lls:
             x = ll(x)
@@ -69,6 +69,6 @@ class GIN(gnn.models.GIN):
         super(GIN, self).__init__(*args)
         self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
 
-    def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
-        x = super(GIN, self).forward(x, edge_idx, *args, **kwargs)
+    def forward(self, x: Tensor, edge_idx: Adj) -> Tensor:
+        x = super(GIN, self).forward(x, edge_idx)
         return self.class_head(x)
