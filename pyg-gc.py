@@ -19,20 +19,21 @@ def to_device(data, device):
     return new
 
 def main(args):
-    data = args.data
+    prefix = args.prefix
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    positive_graphs = pickle.load(open(f'./data/{data}.pkl', 'rb'))
-    negative_graphs = pickle.load(open(f'./data/non_{data}.pkl', 'rb'))
 
-    positive_labels = pickle.load(open(f'./data/{data}.pkl.labels', 'rb'))
-    negative_labels = pickle.load(open(f'./data/non_{data}.pkl.labels', 'rb'))
+    positive_graphs = pickle.load(open(f'./data/{prefix}', 'rb'))
+    negative_graphs = pickle.load(open(f'./data/non_{prefix}', 'rb'))
 
-    positive_data = [(from_networkx(t), positive_labels[i]) for i, t in enumerate(positive_graphs)]
-    negative_data = [(from_networkx(n), negative_labels[i]) for i, n in enumerate(negative_graphs)]
+    positive_labels = pickle.load(open(f'./data/{prefix}.labels', 'rb'))
+    negative_labels = pickle.load(open(f'./data/non_{prefix}.labels', 'rb'))
 
-    train_t, val_t = split(positive_data)
-    train_n, val_n = split(negative_data)
+    postive_tups = [(from_networkx(t), positive_labels[i]) for i, t in enumerate(positive_graphs)]
+    negative_tups = [(from_networkx(n), negative_labels[i]) for i, n in enumerate(negative_graphs)]
+
+    train_t, val_t = split(postive_tups)
+    train_n, val_n = split(negative_tups)
 
     train = to_device(train_t + train_n, device)
     val = to_device(val_t + val_n, device)
@@ -55,7 +56,7 @@ def main(args):
     trainable_params = [p.numel() for p in model.parameters() if p.requires_grad]
     print(f"number of trainable parameters: {sum(trainable_params)}")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
     loss_fn = nn.CrossEntropyLoss()
 
     for epoch in range(args.epochs):
@@ -86,11 +87,12 @@ if __name__ == "__main__":
     p = ArgumentParser()
     p.add_argument("--hidden", type=int, default=16, help="Hidden unit size.")
     p.add_argument("--epochs", type=int, default=100, help="Number of epochs to train for.")
-    p.add_argument("--model", type=str, choices=["gcn", "gat", "gin", "graphsage"])
+    p.add_argument("--model", type=str, choices=["gcn", "gat", "gin", "graphsage"], default="gcn")
     p.add_argument("--layers", type=int, default=3, help="# of graph convolutional layers to be used.")
     p.add_argument("--heads", type=int, default=8, help="# of attention heads for GAT.")
     p.add_argument("--lls", type=int, default=1, help="""# of linear layers in graph classification head.
                                                         Final layer has no activation, but the rest are separated by ReLUs.
-                                                        Default=1.""")
-    p.add_argument("--data", default="trees", choices=["trees", "planar"], help="What dataset to train and evaluate on")
+                                                        default=1.""")
+    p.add_argument("--lr", default=0.001, help="Learning rate, default=0.001")
+    p.add_argument("--prefix", default="trees", choices=["trees", "planar", "3colorable"], help="What dataset to train and evaluate on")
     main(p.parse_args())

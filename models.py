@@ -9,8 +9,9 @@ from torch import LongTensor, Tensor
 from torch_geometric.typing import Adj
 from typing import Callable, Optional
 
+# Linear graph classification head appended to each model
 class GraphClassHead(torch.nn.Module):
-    def __init__(self, hidden_channels: int, num_layers: int, num_classes: int, pooling_fn: Callable) -> None:
+    def __init__(self, hidden_channels: int, num_layers: int, num_classes: int, pooling_fn: Callable=gnn.global_add_pool) -> None:
         super().__init__()
         self.lls = nn.ModuleList(
             nn.Sequential(
@@ -33,7 +34,7 @@ class GraphClassHead(torch.nn.Module):
 class GCN(gnn.models.GCN):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args)
-        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'])
 
     def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
         x = super(GCN, self).forward(x, edge_idx, *args, **kwargs)
@@ -45,7 +46,7 @@ class GAT(gnn.models.GAT):
         super(GAT, self).__init__(*args, heads=kwargs['heads'])
 
         self.final_attn = gnn.GATConv(self.hidden_channels, self.hidden_channels, 1)
-        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'])
 
     def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
         x = super(GAT, self).forward(x, edge_idx, *args, **kwargs)
@@ -57,7 +58,7 @@ class GAT(gnn.models.GAT):
 class GraphSAGE(gnn.models.GraphSAGE):
     def __init__(self, *args, **kwargs) -> None:
         super(GraphSAGE, self).__init__(*args)
-        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'])
     
     def forward(self, x: Tensor, edge_idx: Adj, *args, **kwargs) -> Tensor:
         x = super(GraphSAGE, self).forward(x, edge_idx, *args, **kwargs)
@@ -67,7 +68,7 @@ class GraphSAGE(gnn.models.GraphSAGE):
 class GIN(gnn.models.GIN):
     def __init__(self, *args, **kwargs) -> None:
         super(GIN, self).__init__(*args)
-        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'], gnn.global_add_pool)
+        self.class_head = GraphClassHead(self.hidden_channels, kwargs['num_lls'], kwargs['num_classes'])
 
     def forward(self, x: Tensor, edge_idx: Adj) -> Tensor:
         x = super(GIN, self).forward(x, edge_idx)
