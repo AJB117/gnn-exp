@@ -1,10 +1,25 @@
 import sys
 import networkx as nx
 import matplotlib.pyplot as plt
+import torch
+import numpy as np
 from argparse import ArgumentParser
 from pickle import dump
 
-def generate_planarity_er(num_graphs, n):
+def add_one_hots(G, num_features):
+    n = []
+    for node in G.nodes:
+        one_hot = np.zeros(num_features, dtype=np.float32)
+        one_hot[node] = 1
+        n.append((node, {
+            'x': one_hot
+        }))
+    H = nx.Graph()
+    H.add_nodes_from(n)
+    H.add_edges_from(G.edges)
+    return H
+
+def generate_planarity_dataset(num_graphs, n):
     planar_graphs = []
     non_planar_graphs = []
     tries = 0
@@ -13,6 +28,7 @@ def generate_planarity_er(num_graphs, n):
 
         candidate = nx.erdos_renyi_graph(n, 0.15)
         is_planar = nx.is_planar(candidate)
+        candidate = add_one_hots(candidate, n)
         if is_planar:
             planar_graphs.append(candidate)
         if not is_planar and len(non_planar_graphs) != num_graphs:
@@ -21,7 +37,10 @@ def generate_planarity_er(num_graphs, n):
     return planar_graphs, non_planar_graphs
 
 def main(args):
-    planar_graphs, non_planar_graphs = generate_planarity_er(args.num_graphs, args.n)
+    planar_graphs, non_planar_graphs = generate_planarity_dataset(args.num_graphs, args.n)
+
+    dump([torch.tensor([[0, 1]], dtype=torch.float)]*len(planar_graphs), open(args.filenames[0] + '.labels', 'wb'))
+    dump([torch.tensor([[1, 0]], dtype=torch.float)]*len(non_planar_graphs), open(args.filenames[1] + '.labels', 'wb'))
 
     dump(planar_graphs, open(args.filenames[0], 'wb'))
     dump(non_planar_graphs, open(args.filenames[1], 'wb'))

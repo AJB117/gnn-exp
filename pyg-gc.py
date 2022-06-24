@@ -19,18 +19,20 @@ def to_device(data, device):
     return new
 
 def main(args):
+    data = args.data
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trees = pickle.load(open('./trees.pkl', 'rb'))
-    non_trees = pickle.load(open('./non_trees.pkl', 'rb'))
+    positive_graphs = pickle.load(open(f'./data/{data}.pkl', 'rb'))
+    negative_graphs = pickle.load(open(f'./data/non_{data}.pkl', 'rb'))
 
-    trees_labels = pickle.load(open('./trees_labels.pkl', 'rb'))
-    non_trees_labels = pickle.load(open('./non_trees_labels.pkl', 'rb'))
+    positive_labels = pickle.load(open(f'./data/{data}.pkl.labels', 'rb'))
+    negative_labels = pickle.load(open(f'./data/non_{data}.pkl.labels', 'rb'))
 
-    tree_data = [(from_networkx(t), trees_labels[i]) for i, t in enumerate(trees)]
-    non_tree_data = [(from_networkx(n), non_trees_labels[i]) for i, n in enumerate(non_trees)]
+    positive_data = [(from_networkx(t), positive_labels[i]) for i, t in enumerate(positive_graphs)]
+    negative_data = [(from_networkx(n), negative_labels[i]) for i, n in enumerate(negative_graphs)]
 
-    train_t, val_t = split(tree_data)
-    train_n, val_n = split(non_tree_data)
+    train_t, val_t = split(positive_data)
+    train_n, val_n = split(negative_data)
 
     train = to_device(train_t + train_n, device)
     val = to_device(val_t + val_n, device)
@@ -90,4 +92,5 @@ if __name__ == "__main__":
     p.add_argument("--lls", type=int, default=1, help="""# of linear layers in graph classification head.
                                                         Final layer has no activation, but the rest are separated by ReLUs.
                                                         Default=1.""")
+    p.add_argument("--data", default="trees", choices=["trees", "planar"], help="What dataset to train and evaluate on")
     main(p.parse_args())
