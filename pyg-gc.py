@@ -94,5 +94,5 @@ if __name__ == "__main__":
                                                         Final layer has no activation, but the rest are separated by ReLUs.
                                                         default=1.""")
     p.add_argument("--lr", default=0.001, help="Learning rate, default=0.001")
-    p.add_argument("--prefix", default="trees", choices=["trees", "planar", "3colorable"], help="What dataset to train and evaluate on")
+    p.add_argument("--prefix", default="trees", choices=["trees", "planarity", "3colorable"], help="What dataset to train and evaluate on")
     main(p.parse_args())
