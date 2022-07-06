@@ -1,4 +1,6 @@
+from re import M
 import sys
+from debugpy import is_client_connected
 import numpy as np
 import networkx as nx
 import torch
@@ -12,11 +14,11 @@ class DatasetGenerator:
     def __init__(self, prefix: str) -> None:
         self.prefix = prefix
         try:
-            self.positive = load(open(f'../data/{prefix}', 'rb'))
+            self.positive = load(open(f'../data/{prefix}_test', 'rb'))
         except FileNotFoundError:
             self.positive = []
         try:
-            self.negative = load(open(f'../data/non_{prefix}', 'rb'))
+            self.negative = load(open(f'../data/non_{prefix}_test', 'rb'))
         except FileNotFoundError:
             self.negative = []
 
@@ -41,6 +43,11 @@ class DatasetGenerator:
         G.edata['feat'] = torch.ones(G.num_edges()).reshape(G.num_edges(), -1)
         return G
 
+    @staticmethod
+    def get_avg_deg(G):
+        deg_sum = sum(x[1] for x in G.degree())
+        return deg_sum/len(G.nodes())
+
     @abstractmethod
     def generate(self, num_graphs, n):
         raise NotImplementedError
@@ -62,6 +69,7 @@ class DatasetGenerator:
         torch.save(all_data, f"../data/{self.prefix}.pkl",)
 
     def save(self):
+        self.prefix = self.prefix + "_test"
         dump([torch.tensor([[0, 1]], dtype=torch.float)]*len(self.positive), open("../data/" + self.prefix + '.labels', 'wb'))
         dump([torch.tensor([[1, 0]], dtype=torch.float)]*len(self.negative), open("../data/" + "non_" + self.prefix + '.labels', 'wb'))
 
@@ -79,9 +87,10 @@ class K3ColorableDatasetGenerator(DatasetGenerator):
             positive_found = False
             negative_found = False
             n = randint(lower_n, upper_n)
-
+            e = randint(int(n*(n-1)/20), int(n*(n-1)/12))
             while not negative_found or not positive_found:
-                candidate = nx.erdos_renyi_graph(n, 0.2)
+                # candidate = nx.erdos_renyi_graph(n, 0.2)
+                candidate = nx.gnm_random_graph(n, e)
                 coloring = nx.coloring.greedy_color(candidate)
                 is_k3_colorable = len(set(coloring.values())) <= 3
                 candidate = self.add_one_hots(candidate, n)
@@ -111,12 +120,27 @@ class K3ColorableDatasetGenerator(DatasetGenerator):
         return k3_colorable_graphs, non_k3_colorable_graphs
 
     def check_proportions(self):
-        positive_sizes = [len(x.nodes) for x in self.positive]
-        negative_sizes = [len(x.nodes) for x in self.negative]
-        plt.figure("3-colorable graph node number dist")
-        plt.hist(positive_sizes)
-        plt.figure("Non-3-colorable graph node number dist")
-        plt.hist(negative_sizes)
+        pos_cores = [nx.k_core(x) for x in self.positive]
+        neg_cores = [nx.k_core(x) for x in self.negative]
+        plt.figure("3-colorable graph k-cores")
+        plt.hist(pos_cores)
+        plt.figure("non-3-colorable graph k-cores")
+        plt.hist(neg_cores)
+        plt.show()
+
+        pos_avg_degs = [self.get_avg_deg(x) for x in self.positive]
+        neg_avg_degs = [self.get_avg_deg(x) for x in self.negative]
+        plt.figure("3-colorable (red) vs non-3-colorable (blue) graph avg deg")
+        plt.hist(pos_avg_degs, color='red', label='3-colorable', alpha=0.5)
+        plt.hist(neg_avg_degs, color='blue', label='non-3-colorable', alpha=0.5)
+
+        connected_pos = [x for x in self.positive if nx.is_connected(x)]
+        max_diameter = max([nx.diameter(x) for x in connected_pos])
+        pos_dimaeters = [nx.diameter(x) if nx.is_connected(x) else max_diameter*1.5 for x in self.positive]
+        neg_diameters = [nx.diameter(x) if nx.is_connected(x) else max_diameter*1.5 for x in self.negative]
+        plt.figure("3-colorable (red) vs non-3-colorable (blue) graph diameters")
+        plt.hist(pos_dimaeters, color='red', label='3-colorable', alpha=0.5)
+        plt.hist(neg_diameters, color='blue', label='non-3-colorable', alpha=0.5)
         plt.show()
 
 class PlanarDatsetGenerator(DatasetGenerator):

@@ -22,6 +22,7 @@ def main(args):
     positive, negative = gen.generate(args.num_graphs, args.lower_n, args.upper_n)
 
     gen.save()
+    exit()
     gen.save_to_dgl()
 
     if not args.verify: return
