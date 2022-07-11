@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sb
+import networkx as nx
+
 from argparse import ArgumentParser
 
 
@@ -12,59 +14,54 @@ def sinusoidal_encoding(max_position, d_model, min_freq=1e-4):
     pos_enc[:, 1::2] = np.sin(pos_enc[:, 1::2])
     return pos_enc
 
-def laplacian_encoding(max_position, d_model):
-    position = np.arange(max_position)
-    freq_term_1 = np.pi*np.arange(d_model)/max_position
-    freq_term_2 = np.pi/(2*max_position)
 
-    freqs = freq_term_1 - freq_term_2
+def lap_enc(max_position, d_model, mode="cycle"):
+    graph = None
+    if mode == "cycle":
+        graph = nx.cycle_graph(max_position)
+    elif mode == "path":
+        graph = nx.path_graph(max_position)
+    L = nx.normalized_laplacian_matrix(graph)
+    evals, evecs = np.linalg.eig(L.toarray())
+    idx = np.argsort(evals)
+    evals, evecs = evals[idx], evecs[:, idx]
+    evecs = evecs[:d_model, :]
+    return evecs, evals
 
-    pos_enc = position.reshape(-1,1)*freqs.reshape(1,-1)
-    eigvecs = np.cos(pos_enc)
-    eigvals = [2*(1-np.cos(np.pi*k/max_position)) for k in position]
-    return eigvecs, eigvals
 
 def main(args):
-    d_model = 128
-    max_pos = 128
+    d_model = args.d_model
+    max_pos = args.max_pos
+
     if args.enc == "sine":
         mat = sinusoidal_encoding(max_pos, d_model) 
         map_type = "sinusoidal"
-    elif args.enc == "lap": 
-        mat, eigvals = laplacian_encoding(max_pos, d_model)
-        map_type = "Laplacian eigenvectors"
+    elif args.enc == "lap-path":
+        mat, evals = lap_enc(max_pos, d_model, mode="path")
+        map_type = "Laplacian eigenvectors (path graph)"
+    elif args.enc == "lap-cycle":
+        mat, evals = lap_enc(max_pos, d_model, mode="cycle")
+        map_type = "Laplacian eigenvectors (cycle graph)"
 
-    plt.figure()
+    plt.figure(map_type)
     ax = sb.heatmap(mat, cmap='plasma')
     ax.set_xlabel('Dimension')
     ax.set_ylabel('Position')
     ax.invert_yaxis()
     plt.show()
 
-    if args.enc == "lap":
-        idx = np.array(eigvals).argsort()
-        mat = mat[:, idx]
+    similarities = mat @ mat.transpose()
 
-    similarities = []
-    for enc in mat:
-        similarity = np.array([np.dot(enc, x) for x in mat])
-        similarity /= max(similarity)
-        # similarity[np.where(similarity == 1.0)] = 0.0
-        similarities.append(similarity)
-
-    # plt.pcolormesh(similarities, cmap='hot')
-    # plt.colorbar()
-    # # plt.title(f"Normalized encoding similarity (dot product) heat map ({map_type})")
     ax = sb.heatmap(similarities, cmap='hot')
     ax.set_xlabel("Encoding at word_i")
     ax.set_ylabel("Encoding at word_i")
     ax.invert_yaxis()
-    # plt.xlabel("Encoding at word_i")
-    # plt.ylabel("Encoding at word_i")
     plt.show()
 
 
 if __name__ == "__main__":
     p = ArgumentParser()
-    p.add_argument("--enc", choices=["sine", "lap"])
+    p.add_argument("--enc", choices=["sine", "lap-path", "lap-cycle"], default="sine")
+    p.add_argument("--d_model", type=int, default=128)
+    p.add_argument("--max_pos", type=int, default=128)
     main(p.parse_args())
