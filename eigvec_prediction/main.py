@@ -30,7 +30,7 @@ def gen_data(n, num_states, graph=None):
 
 def construct_data(num_states, graph=None):
     train, val, test = [], [], []
-    train = gen_data(2000, num_states, graph)
+    train = gen_data(1000, num_states, graph)
     val = gen_data(1000, num_states, graph)
     test = gen_data(1000, num_states, graph)
     return train, val, test
@@ -60,7 +60,8 @@ def write_files(data, fnames):
 
 def main(args):
     model = AutomatonPELayer(args)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = 'cpu'
 
     if args.train:
         data_names = ['train', 'val', 'test']
@@ -71,7 +72,7 @@ def main(args):
             data = construct_data(args.num_states, graph)
             write_files(data, data_names)
 
-        best_test_loss = torch.inf
+        best_loss = torch.inf
         best_pe = None
         train, val, test = data
 
@@ -87,27 +88,27 @@ def main(args):
             for data in tqdm(train):
                 optimizer.zero_grad()
                 num_nodes, data = data['num_nodes'], data['eigvecs']
-                pe, _, _ = model(num_nodes)
+                pe, pos_init, pos_transition = model(num_nodes)
                 loss = criterion(pe, torch.from_numpy(data).to(device).float())
                 loss.backward()
                 train_loss += loss.detach().item()
                 optimizer.step()
 
-            model.eval()
-            for data in val:
-                num_nodes, data = data['num_nodes'], data['eigvecs']
-                pe, _, _ = model(num_nodes)
-                loss = criterion(pe, torch.from_numpy(data).to(device).float())
-                val_loss += loss.detach().item()
+            # model.eval()
+            # for data in val:
+            #     num_nodes, data = data['num_nodes'], data['eigvecs']
+            #     pe, _, _ = model(num_nodes)
+            #     loss = criterion(pe, torch.from_numpy(data).to(device).float())
+            #     val_loss += loss.detach().item()
 
-            for data in test:
-                num_nodes, data = data['num_nodes'], data['eigvecs']
-                pe, pos_init, pos_transition = model(num_nodes)
-                loss = criterion(pe, torch.from_numpy(data).to(device).float())
-                test_loss += loss.detach().item()
+            # for data in test:
+            #     num_nodes, data = data['num_nodes'], data['eigvecs']
+            #     pe, pos_init, pos_transition = model(num_nodes)
+            #     loss = criterion(pe, torch.from_numpy(data).to(device).float())
+            #     test_loss += loss.detach().item()
 
-            if train_loss < best_test_loss:
-                best_test_loss = train_loss
+            if train_loss < best_loss:
+                best_loss = train_loss
                 best_pe = pe
                 print('saving...')
                 torch.save(best_pe, 'best_eigvec_pe.pt')
@@ -117,15 +118,21 @@ def main(args):
 
             print(f'epoch {epoch}, train loss: {train_loss}, val loss: {val_loss}, test loss: {test_loss}')
 
-    eigvecs = pickle.load(open('eigenvectors.pkl', 'rb'))
-    best_pe = torch.load('best_eigvec_pe.pt')
+    if args.gnn:
+        matrix = torch.load('mat.pt')
+        _, eigvecs = torch.linalg.eig(matrix)
+        eigvecs = np.real(eigvecs.to(device).numpy())
+        best_pe = torch.load('pe.pt').detach().to(device).numpy()
+    else:
+        eigvecs = pickle.load(open('eigenvectors.pkl', 'rb'))
+        best_pe = torch.load('best_eigvec_pe.pt').detach().numpy()
 
-    plt.figure("Actual Laplacian eigenvectors")
+    plt.figure("Actual eigenvectors")
     ax = sb.heatmap(eigvecs)
     ax.invert_yaxis()
 
-    plt.figure("Predicted Laplacian eigenvectors")
-    ax = sb.heatmap(best_pe.detach().cpu().numpy())
+    plt.figure("PE")
+    ax = sb.heatmap(best_pe)
     ax.invert_yaxis()
 
     plt.show()
@@ -140,4 +147,6 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', type=int, default=1)
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--rand_graph', action='store_true', help="use random erdos-renyi graph, default is cycle graph")
+    parser.add_argument('--gnn', action='store_true')
+    parser.add_argument('--pe_type', type=str, default='learned', choices=['learned', 'random'])
     main(parser.parse_args())
