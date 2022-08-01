@@ -1,5 +1,4 @@
 import argparse
-import random
 import networkx as nx
 import numpy as np
 import pickle
@@ -60,7 +59,6 @@ def write_files(data, fnames):
 
 def main(args):
     model = AutomatonPELayer(args)
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
 
     if args.train:
@@ -94,20 +92,8 @@ def main(args):
                 train_loss += loss.detach().item()
                 optimizer.step()
 
-            # model.eval()
-            # for data in val:
-            #     num_nodes, data = data['num_nodes'], data['eigvecs']
-            #     pe, _, _ = model(num_nodes)
-            #     loss = criterion(pe, torch.from_numpy(data).to(device).float())
-            #     val_loss += loss.detach().item()
-
-            # for data in test:
-            #     num_nodes, data = data['num_nodes'], data['eigvecs']
-            #     pe, pos_init, pos_transition = model(num_nodes)
-            #     loss = criterion(pe, torch.from_numpy(data).to(device).float())
-            #     test_loss += loss.detach().item()
-
             if train_loss < best_loss:
+                model.eval()
                 best_loss = train_loss
                 best_pe = pe
                 print('saving...')
@@ -149,4 +135,5 @@ if __name__ == '__main__':
     parser.add_argument('--rand_graph', action='store_true', help="use random erdos-renyi graph, default is cycle graph")
     parser.add_argument('--gnn', action='store_true')
     parser.add_argument('--pe_type', type=str, default='learned', choices=['learned', 'random'])
+    parser.add_argument('--num_initials', type=int, default=1, help="number of initial state vectors")
     main(parser.parse_args())
